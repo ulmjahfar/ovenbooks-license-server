@@ -45,6 +45,49 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
+// Register company (create trial if new)
+app.post('/company/register', async (req, res) => {
+  const { name, device_id } = req.body;
+
+  if (!device_id) {
+    return res.status(400).json({ error: 'device_id is required' });
+  }
+
+  try {
+    // Check if device already exists
+    const existing = await pool.query(
+      'SELECT * FROM companies WHERE device_id = $1',
+      [device_id]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.json({
+        message: 'Company already registered',
+        company: existing.rows[0]
+      });
+    }
+
+    // Create 7-day trial
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 7);
+
+    const result = await pool.query(
+      `INSERT INTO companies (name, device_id, expiry_date)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [name || 'OvenBooks Company', device_id, expiry]
+    );
+
+    res.json({
+      message: 'Trial created successfully',
+      company: result.rows[0]
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
