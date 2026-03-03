@@ -88,6 +88,53 @@ app.post('/company/register', async (req, res) => {
   }
 });
 
+// License check
+app.post('/license/check', async (req, res) => {
+  const { device_id } = req.body;
+
+  if (!device_id) {
+    return res.status(400).json({ error: 'device_id is required' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT * FROM companies WHERE device_id = $1',
+      [device_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const company = result.rows[0];
+    const now = new Date();
+
+    if (!company.is_active) {
+      return res.json({
+        allowed: false,
+        reason: 'Company is blocked'
+      });
+    }
+
+    if (company.expiry_date && now > company.expiry_date) {
+      return res.json({
+        allowed: false,
+        reason: 'License expired',
+        expiry_date: company.expiry_date
+      });
+    }
+
+    res.json({
+      allowed: true,
+      billing_type: company.billing_type,
+      expiry_date: company.expiry_date
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
