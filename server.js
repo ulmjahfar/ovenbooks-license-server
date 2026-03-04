@@ -443,6 +443,12 @@ app.post("/device/deactivate", async (req, res) => {
 });
 
 // Remove a device (delete from devices table)
+app.get("/device/remove", (req, res) => {
+  res.status(405).json({
+    error: "Method Not Allowed",
+    message: "Use DELETE with JSON body: { \"device_id\": \"<id>\" }",
+  });
+});
 app.delete("/device/remove", async (req, res) => {
   const { device_id } = req.body;
 
