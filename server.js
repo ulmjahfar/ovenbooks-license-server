@@ -54,6 +54,11 @@ async function createTable() {
     ADD COLUMN IF NOT EXISTS device_limit INTEGER DEFAULT 1;
   `);
 
+  await pool.query(`
+    ALTER TABLE devices
+    ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT false;
+  `);
+
   console.log("Tables ready");
 }
 
@@ -126,6 +131,21 @@ app.post('/license/check', async (req, res) => {
   }
 
   try {
+    // Step 1: Find device (if registered in devices table) and check blocked status
+    const deviceResult = await pool.query(
+      'SELECT company_id, blocked FROM devices WHERE device_id = $1 LIMIT 1',
+      [device_id]
+    );
+    if (deviceResult.rows.length > 0) {
+      const device = deviceResult.rows[0];
+      if (device.blocked) {
+        return res.json({
+          allowed: false,
+          message: 'Device blocked'
+        });
+      }
+    }
+
     const result = await pool.query(
       'SELECT * FROM companies WHERE device_id = $1',
       [device_id]
@@ -326,27 +346,106 @@ app.get("/admin/keys", async (req, res) => {
   }
 });
 
+// Block a device (admin) – app will get allowed: false, message: "Device blocked"
+app.post("/admin/device/block", async (req, res) => {
+  const { device_id, admin_secret } = req.body;
+  if (admin_secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+  if (!device_id) {
+    return res.status(400).json({ error: "device_id is required" });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE devices SET blocked = true WHERE device_id = $1 RETURNING *`,
+      [device_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+    res.json({ message: "Device blocked", device: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Unblock a device (admin)
+app.post("/admin/device/unblock", async (req, res) => {
+  const { device_id, admin_secret } = req.body;
+  if (admin_secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+  if (!device_id) {
+    return res.status(400).json({ error: "device_id is required" });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE devices SET blocked = false WHERE device_id = $1 RETURNING *`,
+      [device_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+    res.json({ message: "Device unblocked", device: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.post("/device/register", async (req, res) => {
   try {
-    const { device_id, device_name } = req.body;
+    const { device_id, device_name, company_id } = req.body;
 
-    const company = await pool.query(
-      "SELECT * FROM companies WHERE device_id=$1",
+    // Resolve company: by company_id if provided, else by company's device_id
+    let companyData;
+    if (company_id != null) {
+      const byId = await pool.query("SELECT * FROM companies WHERE id=$1", [company_id]);
+      if (byId.rows.length === 0) {
+        return res.json({ allowed: false, message: "Company not found" });
+      }
+      companyData = byId.rows[0];
+    } else {
+      const company = await pool.query(
+        "SELECT * FROM companies WHERE device_id=$1",
+        [device_id]
+      );
+      if (company.rows.length === 0) {
+        return res.json({ allowed: false });
+      }
+      companyData = company.rows[0];
+    }
+
+    // If device_id already exists in devices, it must be for the same company
+    const existingDevice = await pool.query(
+      "SELECT company_id FROM devices WHERE device_id=$1 LIMIT 1",
       [device_id]
     );
 
-    if (company.rows.length === 0) {
-      return res.json({ allowed: false });
+    if (existingDevice.rows.length > 0) {
+      const existingCompanyId = existingDevice.rows[0].company_id;
+      if (existingCompanyId !== companyData.id) {
+        return res.json({
+          allowed: false,
+          message: "Device already registered to another company"
+        });
+      }
+      // Same company: update last_seen (and optionally device_name)
+      await pool.query(
+        `UPDATE devices SET last_seen=CURRENT_TIMESTAMP, device_name=COALESCE($2, device_name)
+         WHERE device_id=$1`,
+        [device_id, device_name]
+      );
+      return res.json({ allowed: true });
     }
-
-    const companyData = company.rows[0];
 
     const devices = await pool.query(
       "SELECT * FROM devices WHERE company_id=$1",
       [companyData.id]
     );
 
-    if (devices.rows.length >= companyData.device_limit) {
+    if (devices.rows.length >= (companyData.device_limit ?? 1)) {
       return res.json({
         allowed: false,
         message: "Device limit reached"
