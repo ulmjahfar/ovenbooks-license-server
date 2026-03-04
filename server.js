@@ -489,6 +489,27 @@ app.post("/device/register", async (req, res) => {
   }
 });
 
+// List devices for a company
+app.get("/devices", async (req, res) => {
+  try {
+    const { company_id } = req.query;
+
+    if (!company_id) {
+      return res.status(400).json({ error: "company_id is required" });
+    }
+
+    const result = await pool.query(
+      "SELECT * FROM devices WHERE company_id=$1 ORDER BY id DESC",
+      [company_id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
