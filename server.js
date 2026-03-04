@@ -188,6 +188,37 @@ app.post("/admin/upgrade-license", async (req, res) => {
   }
 });
 
+app.post("/admin/generate-key", async (req, res) => {
+
+  const { plan, days, admin_secret } = req.body;
+
+  if (admin_secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  function generateKey() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let key = "OB-";
+    for (let i = 0; i < 12; i++) {
+      key += chars[Math.floor(Math.random() * chars.length)];
+      if (i == 3 || i == 7) key += "-";
+    }
+    return key;
+  }
+
+  const key = generateKey();
+
+  const result = await pool.query(
+    `INSERT INTO product_keys (license_key, plan, days)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [key, plan, days]
+  );
+
+  res.json(result.rows[0]);
+
+});
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
