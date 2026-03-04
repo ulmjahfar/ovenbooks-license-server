@@ -282,6 +282,18 @@ app.get("/admin/companies", async (req, res) => {
   }
 });
 
+app.get("/admin/keys", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM product_keys ORDER BY id DESC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("admin/keys error:", err);
+    res.status(500).json({ error: "Server error", message: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
