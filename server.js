@@ -346,7 +346,30 @@ app.get("/admin/keys", async (req, res) => {
   }
 });
 
-// Block a device (admin) – app will get allowed: false, message: "Device blocked"
+// Block a device (admin) – sets devices.blocked = true; app gets allowed: false, message: "Device blocked"
+app.post("/admin/block-device", async (req, res) => {
+  const { device_id, admin_secret } = req.body;
+  if (admin_secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+  if (!device_id) {
+    return res.status(400).json({ error: "device_id is required" });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE devices SET blocked = true WHERE device_id = $1 RETURNING *`,
+      [device_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+    res.json({ message: "Device blocked", device: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.post("/admin/device/block", async (req, res) => {
   const { device_id, admin_secret } = req.body;
   if (admin_secret !== process.env.ADMIN_SECRET) {
