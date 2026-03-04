@@ -263,6 +263,18 @@ app.post("/license/activate-key", async (req, res) => {
 
 });
 
+app.get("/admin/companies", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM companies ORDER BY id DESC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
