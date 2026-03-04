@@ -219,6 +219,50 @@ app.post("/admin/generate-key", async (req, res) => {
 
 });
 
+app.post("/license/activate-key", async (req, res) => {
+
+  const { device_id, license_key } = req.body;
+
+  const key = await pool.query(
+    "SELECT * FROM product_keys WHERE license_key=$1",
+    [license_key]
+  );
+
+  if (key.rows.length === 0)
+    return res.json({ allowed: false, message: "Invalid key" });
+
+  const data = key.rows[0];
+
+  if (data.is_used)
+    return res.json({ allowed: false, message: "Key already used" });
+
+  let expiry = null;
+
+  if (data.days) {
+    expiry = new Date();
+    expiry.setDate(expiry.getDate() + data.days);
+  }
+
+  await pool.query(
+    `UPDATE companies
+     SET billing_type=$1,
+         expiry_date=$2
+     WHERE device_id=$3`,
+    [data.plan, expiry, device_id]
+  );
+
+  await pool.query(
+    `UPDATE product_keys
+     SET is_used=true,
+         used_device=$1
+     WHERE license_key=$2`,
+    [device_id, license_key]
+  );
+
+  res.json({ allowed: true, message: "License activated" });
+
+});
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
