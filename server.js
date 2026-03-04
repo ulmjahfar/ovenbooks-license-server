@@ -14,6 +14,7 @@ const pool = new Pool({
 
 // Auto create companies table
 async function createTable() {
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS companies (
       id SERIAL PRIMARY KEY,
@@ -25,7 +26,20 @@ async function createTable() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  console.log("Companies table ready ✅");
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS product_keys (
+      id SERIAL PRIMARY KEY,
+      license_key TEXT UNIQUE,
+      plan TEXT,
+      days INTEGER,
+      is_used BOOLEAN DEFAULT false,
+      used_device TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  console.log("Tables ready");
 }
 
 createTable();
