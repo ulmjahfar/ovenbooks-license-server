@@ -442,14 +442,8 @@ app.post("/device/deactivate", async (req, res) => {
   }
 });
 
-// Remove a device (delete from devices table)
-app.get("/device/remove", (req, res) => {
-  res.status(405).json({
-    error: "Method Not Allowed",
-    message: "Use DELETE with JSON body: { \"device_id\": \"<id>\" }",
-  });
-});
-app.delete("/device/remove", async (req, res) => {
+// Remove a device (delete from devices table). Supports both POST and DELETE.
+async function handleDeviceRemove(req, res) {
   const { device_id } = req.body;
 
   if (!device_id) {
@@ -471,7 +465,16 @@ app.delete("/device/remove", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
+}
+
+app.get("/device/remove", (req, res) => {
+  res.status(405).json({
+    error: "Method Not Allowed",
+    message: "Use POST or DELETE with JSON body: { \"device_id\": \"<id>\" }",
+  });
 });
+app.post("/device/remove", handleDeviceRemove);
+app.delete("/device/remove", handleDeviceRemove);
 
 app.post("/device/register", async (req, res) => {
   try {
