@@ -153,6 +153,23 @@ app.post('/license/check', async (req, res) => {
       });
     }
 
+    // Device count check: devices_used <= device_limit
+    const deviceLimit = company.device_limit ?? 1;
+    const countResult = await pool.query(
+      'SELECT COUNT(*)::int AS devices_used FROM devices WHERE company_id = $1',
+      [company.id]
+    );
+    const devicesUsed = countResult.rows[0].devices_used;
+
+    if (devicesUsed > deviceLimit) {
+      return res.json({
+        allowed: false,
+        reason: 'Device limit exceeded',
+        devices_used: devicesUsed,
+        device_limit: deviceLimit
+      });
+    }
+
     res.json({
       allowed: true,
       billing_type: company.billing_type,
