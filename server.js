@@ -39,6 +39,21 @@ async function createTable() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS devices (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER,
+      device_id TEXT,
+      device_name TEXT,
+      last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  await pool.query(`
+    ALTER TABLE companies
+    ADD COLUMN IF NOT EXISTS device_limit INTEGER DEFAULT 1;
+  `);
+
   console.log("Tables ready");
 }
 
@@ -291,6 +306,47 @@ app.get("/admin/keys", async (req, res) => {
   } catch (err) {
     console.error("admin/keys error:", err);
     res.status(500).json({ error: "Server error", message: err.message });
+  }
+});
+
+app.post("/device/register", async (req, res) => {
+  try {
+    const { device_id, device_name } = req.body;
+
+    const company = await pool.query(
+      "SELECT * FROM companies WHERE device_id=$1",
+      [device_id]
+    );
+
+    if (company.rows.length === 0) {
+      return res.json({ allowed: false });
+    }
+
+    const companyData = company.rows[0];
+
+    const devices = await pool.query(
+      "SELECT * FROM devices WHERE company_id=$1",
+      [companyData.id]
+    );
+
+    if (devices.rows.length >= companyData.device_limit) {
+      return res.json({
+        allowed: false,
+        message: "Device limit reached"
+      });
+    }
+
+    await pool.query(
+      `INSERT INTO devices (company_id, device_id, device_name)
+       VALUES ($1, $2, $3)`,
+      [companyData.id, device_id, device_name]
+    );
+
+    res.json({ allowed: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "server error" });
   }
 });
 
