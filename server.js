@@ -467,14 +467,18 @@ async function handleDeviceRemove(req, res) {
   }
 }
 
-app.get("/device/remove", (req, res) => {
+const deviceRemoveGet = (req, res) => {
   res.status(405).json({
     error: "Method Not Allowed",
     message: "Use POST or DELETE with JSON body: { \"device_id\": \"<id>\" }",
   });
-});
+};
+app.get("/device/remove", deviceRemoveGet);
+app.get("/device/remove/", deviceRemoveGet);
 app.post("/device/remove", handleDeviceRemove);
+app.post("/device/remove/", handleDeviceRemove);
 app.delete("/device/remove", handleDeviceRemove);
+app.delete("/device/remove/", handleDeviceRemove);
 
 app.post("/device/register", async (req, res) => {
   try {
