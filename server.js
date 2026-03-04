@@ -417,6 +417,31 @@ app.post("/admin/device/unblock", async (req, res) => {
   }
 });
 
+// Deactivate a device (no admin secret; used by app)
+app.post("/device/deactivate", async (req, res) => {
+  const { device_id } = req.body;
+
+  if (!device_id) {
+    return res.status(400).json({ error: "device_id is required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE devices SET blocked = true WHERE device_id = $1 RETURNING *`,
+      [device_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+
+    res.json({ message: "Device deactivated", device: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.post("/device/register", async (req, res) => {
   try {
     const { device_id, device_name, company_id } = req.body;
