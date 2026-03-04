@@ -135,6 +135,45 @@ app.post('/license/check', async (req, res) => {
   }
 });
 
+app.post("/admin/upgrade-license", async (req, res) => {
+  const { device_id, billing_type, admin_secret } = req.body;
+
+  if (admin_secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  try {
+    let expiry = null;
+
+    if (billing_type === "monthly") {
+      expiry = new Date();
+      expiry.setMonth(expiry.getMonth() + 1);
+    }
+
+    if (billing_type === "yearly") {
+      expiry = new Date();
+      expiry.setFullYear(expiry.getFullYear() + 1);
+    }
+
+    const result = await pool.query(
+      `UPDATE companies
+       SET billing_type=$1, expiry_date=$2
+       WHERE device_id=$3
+       RETURNING *`,
+      [billing_type, expiry, device_id]
+    );
+
+    res.json({
+      message: "License upgraded successfully",
+      company: result.rows[0],
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
